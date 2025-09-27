@@ -1,22 +1,30 @@
 import { NextResponse } from "next/server";
-import prisma from "../../../lib/prisma";
+import prisma from "@/lib/prisma";
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { text } = body;
+    const { text, id } = body;
 
-    const newDocument = await prisma.document.create({
-      data: {
-        content: text,
-      },
-    });
+    let document;
 
-    console.log("New document created: ", newDocument);
+    if (id) {
+      document = await prisma.document.update({
+        where: { id: id },
+        data: { content: text },
+      });
+      console.log("✅ Document updated in database:", document);
+    } else {
+      document = await prisma.document.create({
+        data: { content: text },
+      });
+      console.log("✅ New document saved to database:", document);
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Data received successfully!",
-      documentId: newDocument.id,
+      message: "Document saved successfully!",
+      documentId: document.id,
     });
   } catch (error) {
     console.error("Error in /api/save:", error);
