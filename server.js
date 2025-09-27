@@ -1,10 +1,13 @@
-const { createServer } = require("http");
-const { Server } = require("socket.io");
+import { createServer } from "http";
+import { Server } from "socket.io";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
     methods: ["GET", "POST"],
   },
 });

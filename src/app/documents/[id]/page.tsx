@@ -12,7 +12,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const newSocket = io("http://localhost:3001");
+    const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL!);
     setSocket(newSocket);
 
     newSocket.emit("join-document", documentId);
