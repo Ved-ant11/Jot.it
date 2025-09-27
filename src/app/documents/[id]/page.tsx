@@ -103,7 +103,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             placeholder="Start typing your notes here..."
             className="w-full h-full bg-transparent text-gray-200 p-8 text-lg resize-none 
                        outline-none focus-visible:ring-1 focus-visible:ring-indigo-500
-                       focus-visible:border-transparent"
+                       focus-visible:border-transparent transition-colors duration-300"
           />
         )}
       </div>
