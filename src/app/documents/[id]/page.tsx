@@ -3,13 +3,16 @@
 import { useState, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
 import React from "react";
+import toast from "react-hot-toast";
 
 export default function EditorPage({ params }: { params: { id: string } }) {
   const documentId = params.id;
   const [text, setText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  // Store the socket connection in state to prevent race conditions
   const [socket, setSocket] = useState<Socket | null>(null);
+
+  const notif = () => toast.success("Document saved successfully!");
+  const errorNotif = () => toast.error("Error saving document.");
 
   useEffect(() => {
     const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL!);
@@ -59,11 +62,13 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text, id: documentId }),
       });
+      if (response.ok) {
+        notif();
+      }
       if (!response.ok) throw new Error("Failed to save document.");
-      alert("Document saved successfully!");
     } catch (error) {
       console.error("Save error:", error);
-      alert("Error: Could not save document.");
+      errorNotif();
     } finally {
       setIsSaving(false);
     }
