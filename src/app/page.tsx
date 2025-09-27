@@ -2,7 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import React from "react";
+import toast from "react-hot-toast";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export default function HomePage() {
   const router = useRouter();
@@ -10,38 +20,59 @@ export default function HomePage() {
 
   const handleCreateNew = async () => {
     setIsCreating(true);
-    try {
-      const response = await fetch("/api/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: "" }), 
-      });
 
+    const createPromise = fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "" }),
+    }).then((response) => {
       if (!response.ok) throw new Error("Failed to create document.");
+      return response.json();
+    });
 
-      const data = await response.json();
-      const newDocId = data.documentId;
+    toast.promise(createPromise, {
+      loading: "Creating new document...",
+      success: "New document created!",
+      error: "Error: Could not create document.",
+    });
 
-      router.push(`/documents/${newDocId}`);
-    } catch (error) {
-      console.error("Creation error:", error);
-      alert("Error: Could not create a new document.");
+    try {
+      const data = await createPromise;
+      router.push(`/documents/${data.documentId}`);
+    } catch (err) {
+      console.error(err);
       setIsCreating(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900">
-      <div className="text-center">
-        <h1 className="text-6xl font-bold text-white mb-8">Jot<span className="text-indigo-600">.It</span></h1>
-        <button
-          onClick={handleCreateNew}
-          disabled={isCreating}
-          className="px-8 py-4 bg-cyan-600 text-white font-bold text-xl rounded-lg shadow-lg hover:bg-cyan-700 disabled:bg-gray-500 transition-colors duration-200"
-        >
-          {isCreating ? "Creating..." : "Create New Document"}
-        </button>
-      </div>
+    <div className="flex items-center justify-center min-h-screen bg-[#0d0d0d] text-gray-200">
+      <Card className="w-[400px] bg-[#1a1a1a] border border-gray-800 shadow-xl rounded-2xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-4xl font-extrabold tracking-tight">
+            <span className="text-amber-400">Jot</span><span className="text-indigo-400">.It</span>
+          </CardTitle>
+          <CardDescription className="text-gray-400 text-sm mt-1">
+            Real-time collaborative notepad.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <Button
+            onClick={handleCreateNew}
+            disabled={isCreating}
+            size="lg"
+            className="w-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 
+                       transition-colors duration-200 rounded-xl font-medium"
+          >
+            {isCreating ? "Creating..." : "Create New Document"}
+          </Button>
+        </CardContent>
+
+        <CardFooter>
+          <p className="text-xs text-gray-500 mx-auto">Next.js • Socket.IO</p>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

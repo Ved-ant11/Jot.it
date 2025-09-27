@@ -2,26 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
-import React from "react";
 import toast from "react-hot-toast";
+import Skeleton from "@/components/Skeleton";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function EditorPage({ params }: { params: { id: string } }) {
   const documentId = params.id;
   const [text, setText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
-
-  const notif = () => toast.success("Document saved successfully!");
-  const errorNotif = () => toast.error("Error saving document.");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL!);
     setSocket(newSocket);
 
     newSocket.emit("join-document", documentId);
-    newSocket.on("receive-change", (newText: string) => {
-      setText(newText);
-    });
+    newSocket.on("receive-change", (newText: string) => setText(newText));
 
     return () => {
       newSocket.disconnect();
@@ -31,15 +29,17 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchDocument = async () => {
       if (!documentId) return;
+      setIsLoading(true);
       try {
         const response = await fetch(`/api/get-document/${documentId}`);
-        if (!response.ok) {
-          throw new Error("Document not found");
-        }
+        if (!response.ok) throw new Error("Document not found");
         const data = await response.json();
         setText(data.document.content || "");
       } catch (error) {
         console.error("Failed to load document:", error);
+        toast.error("Could not load the document.");
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -49,54 +49,68 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
     setText(newText);
-    if (socket) {
-      socket.emit("text-change", { newText, documentId });
-    }
+    socket?.emit("text-change", { newText, documentId });
   };
 
   const handleSave = async () => {
     setIsSaving(true);
+    const savePromise = fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, id: documentId }),
+    }).then((res) => {
+      if (!res.ok) throw new Error("Save failed");
+      return res.json();
+    });
+
+    toast.promise(savePromise, {
+      loading: "Saving document...",
+      success: "Document saved successfully!",
+      error: "Error: Could not save.",
+    });
+
     try {
-      const response = await fetch("/api/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text, id: documentId }),
-      });
-      if (response.ok) {
-        notif();
-      }
-      if (!response.ok) throw new Error("Failed to save document.");
-    } catch (error) {
-      console.error("Save error:", error);
-      errorNotif();
+      await savePromise;
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-12 bg-gray-900 text-white">
-      <div className="w-full max-w-5xl flex justify-between items-center mb-8">
-        <h1 className="text-5xl font-bold text-cyan-400">
-          Jot<span className="text-indigo-600">.It</span>
+    <main className="flex min-h-screen flex-col items-center px-6 py-12 bg-[#0d0d0d] text-gray-200">
+      <div className="w-full max-w-5xl flex justify-between items-center mb-10">
+        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+          Jot<span className="text-indigo-400">.It</span>
         </h1>
-        <button
+        <Button
           onClick={handleSave}
           disabled={isSaving}
-          className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-200"
+          className="px-6 py-2 text-lg font-medium bg-indigo-600 
+                     hover:bg-indigo-500 active:bg-indigo-700
+                     rounded-xl shadow-md transition-colors duration-200"
         >
           {isSaving ? "Saving..." : "Save"}
-        </button>
+        </Button>
       </div>
-      <div className="w-full max-w-5xl h-[70vh] bg-slate-900 rounded-lg shadow-xl border border-gray-700">
-        <textarea
-          value={text}
-          onChange={handleTextChange}
-          className="w-full h-full bg-transparent text-white p-10 text-lg resize-none outline-none"
-          placeholder="Start typing your notes here..."
-        />
+
+      <div className="w-full max-w-5xl h-[70vh] bg-[#1a1a1a] rounded-2xl shadow-xl">
+        {isLoading ? (
+          <Skeleton />
+        ) : (
+          <Textarea
+            value={text}
+            onChange={handleTextChange}
+            placeholder="Start typing your notes here..."
+            className="w-full h-full bg-transparent text-gray-200 p-8 text-lg resize-none 
+                       outline-none focus-visible:ring-1 focus-visible:ring-indigo-500
+                       focus-visible:border-transparent"
+          />
+        )}
       </div>
-      <p className="mt-4 text-gray-400">Character Count: {text.length}</p>
+
+      <p className="mt-5 text-gray-500 text-sm">
+        Character Count: <span className="text-gray-300">{text.length}</span>
+      </p>
     </main>
   );
 }
