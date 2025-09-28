@@ -114,9 +114,13 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="text-center py-20">
-            <p>You don&apos;t have any documents yet.</p>
-            <p>
-              Click <span className="font-bold text-amber-400">Create New Document</span> to get started!
+            <p className="text-white">You don&apos;t have any documents yet.</p>
+            <p className="text-white mt-4">
+              Click{" "}
+              <span className="font-bold text-amber-400">
+                Create New Document
+              </span>{" "}
+              to get started!
             </p>
           </div>
         )}
