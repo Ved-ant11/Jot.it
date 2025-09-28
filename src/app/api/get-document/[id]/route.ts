@@ -22,8 +22,7 @@ export async function GET(
 
     const document = await prisma.document.findFirst({
       where: {
-        id: documentId,
-        authorId: currentUserId,
+        AND: [{ id: documentId }, { authorId: currentUserId }],
       },
     });
 
