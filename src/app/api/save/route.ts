@@ -1,7 +1,24 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]/route";
 
 export async function POST(request: Request) {
+  // --- DIAGNOSTIC LOG ---
+  // This will help us see what the server thinks the session is.
+  const session = await getServerSession(authOptions);
+  console.log("[API /api/save] SESSION CHECK:", session);
+  // ----------------------
+
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, message: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  const currentUserId = session.user.id;
+
   try {
     const body = await request.json();
     const { text, id } = body;
@@ -9,16 +26,28 @@ export async function POST(request: Request) {
     let document;
 
     if (id) {
+      const documentToUpdate = await prisma.document.findUnique({
+        where: { id: id },
+      });
+
+      if (documentToUpdate?.authorId !== currentUserId) {
+        return NextResponse.json(
+          { success: false, message: "Forbidden" },
+          { status: 403 }
+        );
+      }
+
       document = await prisma.document.update({
         where: { id: id },
         data: { content: text },
       });
-      console.log("✅ Document updated in database:", document);
     } else {
       document = await prisma.document.create({
-        data: { content: text },
+        data: {
+          content: text,
+          authorId: currentUserId,
+        },
       });
-      console.log("✅ New document saved to database:", document);
     }
 
     return NextResponse.json({

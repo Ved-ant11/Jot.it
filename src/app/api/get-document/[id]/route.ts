@@ -1,22 +1,38 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../../auth/[...nextauth]/route";
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, message: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  const currentUserId = session.user.id;
+
   try {
     const documentId = params.id;
 
-    const document = await prisma.document.findUnique({
+    const document = await prisma.document.findFirst({
       where: {
         id: documentId,
+        authorId: currentUserId,
       },
     });
 
     if (!document) {
       return NextResponse.json(
-        { success: false, message: "Document not found." },
+        {
+          success: false,
+          message: "Document not found or you do not have permission.",
+        },
         { status: 404 }
       );
     }
