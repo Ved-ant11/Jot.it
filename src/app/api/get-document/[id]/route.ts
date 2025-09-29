@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import prisma from "@/lib/prisma";
 
 export async function GET(
   request: Request,
@@ -19,17 +19,30 @@ export async function GET(
 
   try {
     const documentId = params.id;
-
     const document = await prisma.document.findFirst({
       where: {
         id: documentId,
-        authorId: currentUserId,
+        OR: [
+          {
+            authorId: currentUserId,
+          },
+          {
+            permissions: {
+              some: {
+                userId: currentUserId,
+              },
+            },
+          },
+        ],
       },
     });
 
     if (!document) {
       return NextResponse.json(
-        { success: false, message: "Document not found" },
+        {
+          success: false,
+          message: "Document not found or you do not have permission.",
+        },
         { status: 404 }
       );
     }
@@ -38,7 +51,7 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching document:", error);
     return NextResponse.json(
-      { success: false, message: "An error occurred" },
+      { success: false, message: "An error occurred." },
       { status: 500 }
     );
   }

@@ -17,7 +17,18 @@ export async function GET(request: Request) {
   try {
     const documents = await prisma.document.findMany({
       where: {
-        authorId: currentUserId,
+        OR: [
+          {
+            authorId: currentUserId,
+          },
+          {
+            permissions: {
+              some: {
+                userId: currentUserId,
+              },
+            },
+          },
+        ],
       },
       orderBy: {
         updatedAt: "desc",

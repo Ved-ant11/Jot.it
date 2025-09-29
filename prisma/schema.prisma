@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,9 +15,28 @@ model Document {
   content   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  author    User     @relation(fields: [authorId], references: [id])
+  
+  author    User    @relation(fields: [authorId], references: [id])
   authorId  String
+
+  // Add a relation to the new permissions model
+  permissions DocumentPermission[]
 }
+
+model DocumentPermission {
+  id         String @id @default(cuid())
+  userId     String
+  documentId String
+  
+  // You could expand this later to add roles like "VIEWER" vs "EDITOR"
+  // role       String @default("EDITOR")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentId]) 
+}
+
 
 model Account {
   id                 String  @id @default(cuid())
@@ -57,7 +73,10 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
-  documents     Document[] 
+  documents     Document[]
+  
+  // Add a relation to the new permissions model
+  permissions   DocumentPermission[]
 }
 
 model VerificationToken {

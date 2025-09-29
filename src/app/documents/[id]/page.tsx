@@ -1,30 +1,52 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { io, Socket } from "socket.io-client";
 import toast from "react-hot-toast";
 import Skeleton from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import ShareDialog from "@/components/ShareDialog";
+
+type ActiveUser = {
+  id: string;
+  name: string | null;
+  image: string | null;
+};
 
 export default function EditorPage({ params }: { params: { id: string } }) {
   const documentId = params.id;
+  const { data: session } = useSession();
   const [text, setText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
 
   useEffect(() => {
+    if (!session?.user) return;
+
     const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL!);
     setSocket(newSocket);
 
-    newSocket.emit("join-document", documentId);
+    newSocket.emit("join-document", { documentId, user: session.user });
+    newSocket.on("update-user-list", (users: ActiveUser[]) => {
+      setActiveUsers(users);
+    });
     newSocket.on("receive-change", (newText: string) => setText(newText));
 
     return () => {
       newSocket.disconnect();
     };
-  }, [documentId]);
+  }, [documentId, session]);
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -42,7 +64,6 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         setIsLoading(false);
       }
     };
-
     fetchDocument();
   }, [documentId]);
 
@@ -82,15 +103,40 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
           Jot<span className="text-indigo-400">.It</span>
         </h1>
-        <Button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="px-6 py-2 text-lg font-medium bg-indigo-600 
-                     hover:bg-indigo-500 active:bg-indigo-700
-                     rounded-xl shadow-md transition-colors duration-200"
-        >
-          {isSaving ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex -space-x-4">
+            <TooltipProvider>
+              {activeUsers.map((user) => (
+                <Tooltip key={user.id}>
+                  <TooltipTrigger>
+                    <Avatar>
+                      <AvatarImage
+                        src={user.image || ""}
+                        alt={user.name || "User"}
+                      />
+                      <AvatarFallback>
+                        {user.name?.charAt(0) || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{user.name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </TooltipProvider>
+          </div>
+          <ShareDialog documentId={documentId} />
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-6 py-2 text-lg font-medium bg-indigo-600 
+                       hover:bg-indigo-500 active:bg-indigo-700
+                       rounded-xl shadow-md transition-colors duration-200"
+          >
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+        </div>
       </div>
 
       <div className="w-full max-w-5xl h-[70vh] bg-[#1a1a1a] rounded-2xl shadow-xl">
@@ -102,8 +148,8 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             onChange={handleTextChange}
             placeholder="Start typing your notes here..."
             className="w-full h-full bg-transparent text-gray-200 p-8 text-lg resize-none 
-                       outline-none focus-visible:ring-1 focus-visible:ring-indigo-500
-                       focus-visible:border-transparent transition-colors duration-300"
+                         outline-none focus-visible:ring-1 focus-visible:ring-indigo-500
+                         focus-visible:border-transparent transition-colors duration-300"
           />
         )}
       </div>
