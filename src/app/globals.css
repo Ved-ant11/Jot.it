@@ -128,3 +128,14 @@
   background-size: 200% 200%;
   animation: gradient-x 6s ease infinite;
 }
+
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.remote-caret {
+  width: 2px;
+  height: 1.2em;      
+  animation: caret-blink 1s step-end infinite;
+}

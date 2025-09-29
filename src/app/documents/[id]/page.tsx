@@ -26,6 +26,7 @@ type ActiveUser = {
 type CursorData = {
   position: number;
   user: ActiveUser;
+  updatedAt: number; 
 };
 
 const colorFromId = (id: string) => {
@@ -42,6 +43,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const { data: session } = useSession();
   const throttleTimeout = useRef<NodeJS.Timeout | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const [text, setText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -54,24 +56,24 @@ export default function EditorPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     if (!session?.user) return;
-
     const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL!);
     setSocket(newSocket);
 
     newSocket.emit("join-document", { documentId, user: session.user });
-    newSocket.on("update-user-list", (users: ActiveUser[]) => {
-      setActiveUsers(users);
-    });
+    newSocket.on("update-user-list", (users: ActiveUser[]) =>
+      setActiveUsers(users)
+    );
     newSocket.on("receive-change", (newText: string) => setText(newText));
     newSocket.on("receive-cursor-change", (data: CursorData) => {
       if (data.user.id !== session.user.id) {
-        setCursors((prev) => ({ ...prev, [data.user.id]: data }));
+        setCursors((prev) => ({
+          ...prev,
+          [data.user.id]: { ...data, updatedAt: Date.now() },
+        }));
       }
     });
 
-    return () => {
-      newSocket.disconnect();
-    };
+    return () => {newSocket.disconnect()};
   }, [documentId, session]);
 
   useEffect(() => {
@@ -93,11 +95,24 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     fetchDocument();
   }, [documentId]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCursors((prev) => {
+        const now = Date.now();
+        const next: typeof prev = {};
+        for (const [id, c] of Object.entries(prev)) {
+          if (now - c.updatedAt < 30000) next[id] = c;
+        }
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   useLayoutEffect(() => {
     const newCoords: { [id: string]: { top: number; left: number } } = {};
     const textarea = textareaRef.current;
     if (!textarea) return;
-
     Object.values(cursors).forEach(({ position, user }) => {
       if (user?.id) {
         newCoords[user.id] = getCaretCoordinates(textarea, position);
@@ -112,20 +127,20 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     socket?.emit("text-change", { newText, documentId });
   };
 
+  const emitCursor = (pos: number) => {
+    if (socket && session?.user) {
+      socket.emit("cursor-change", {
+        documentId,
+        position: pos,
+        user: session.user,
+      });
+    }
+  };
+
   const handleCursorChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     const position = e.currentTarget.selectionStart;
-    if (throttleTimeout.current) {
-      clearTimeout(throttleTimeout.current);
-    }
-    throttleTimeout.current = setTimeout(() => {
-      if (socket && session?.user) {
-        socket.emit("cursor-change", {
-          documentId,
-          position,
-          user: session.user,
-        });
-      }
-    }, 50);
+    if (throttleTimeout.current) clearTimeout(throttleTimeout.current);
+    throttleTimeout.current = setTimeout(() => emitCursor(position), 50);
   };
 
   const handleSave = async () => {
@@ -204,6 +219,8 @@ export default function EditorPage({ params }: { params: { id: string } }) {
               value={text}
               onChange={handleTextChange}
               onSelect={handleCursorChange}
+              onKeyUp={handleCursorChange}
+              onFocus={handleCursorChange}
               onScroll={handleCursorChange}
               placeholder="Start typing your notes here..."
               className="w-full h-full bg-transparent text-gray-200 p-8 text-lg resize-none 
@@ -219,17 +236,17 @@ export default function EditorPage({ params }: { params: { id: string } }) {
                 return (
                   <div
                     key={user.id}
-                    className="absolute transition-transform duration-100 ease-linear"
+                    className="absolute transition-transform duration-75 ease-linear"
                     style={{
                       transform: `translate(${coords.left}px, ${coords.top}px)`,
                     }}
                   >
                     <div
-                      className="w-0.5 h-6"
+                      className="remote-caret"
                       style={{ backgroundColor: userColor }}
                     />
                     <div
-                      className="absolute text-white text-xs px-2 py-0.5 rounded"
+                      className="absolute text-white text-xs px-1.5 py-0.5 rounded"
                       style={{
                         backgroundColor: userColor,
                         whiteSpace: "nowrap",
