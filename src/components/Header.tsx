@@ -2,7 +2,6 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button } from "./ui/button";
-import Skeleton from "./Skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,18 +26,15 @@ export default function Header() {
         </Link>
 
         {status === "loading" ? (
-          <div>
-            <Skeleton />
-          </div>
+          <div className="h-10 w-10 rounded-full bg-slate-700 animate-pulse" />
         ) : session ? (
-          // If the user is logged in, show their profile dropdown
           <DropdownMenu>
             <DropdownMenuTrigger>
               <Avatar>
                 <AvatarImage
                   src={session.user?.image || ""}
                   alt="User avatar"
-                  className ="bg-indigo-800"
+                  className="bg-indigo-800"
                 />
                 <AvatarFallback>
                   {session.user?.name?.charAt(0) || "U"}
@@ -48,14 +44,18 @@ export default function Header() {
             <DropdownMenuContent>
               <DropdownMenuLabel>{session.user?.name}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => signOut()}>
+              <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/" })}>
                 Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          // If the user is not logged in, show a sign-in button
-          <Button onClick={() => signIn("google")} className="hover:bg-slate-700 transition duration-300">Sign in with Google</Button>
+          <Button
+            onClick={() => signIn("google")}
+            className="hover:bg-slate-700 transition duration-300"
+          >
+            Sign in with Google
+          </Button>
         )}
       </div>
     </header>

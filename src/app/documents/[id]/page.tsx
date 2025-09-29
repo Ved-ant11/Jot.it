@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useSession } from "next-auth/react";
 import { io, Socket } from "socket.io-client";
 import toast from "react-hot-toast";
+import getCaretCoordinates from "textarea-caret";
 import Skeleton from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,14 +23,34 @@ type ActiveUser = {
   image: string | null;
 };
 
+type CursorData = {
+  position: number;
+  user: ActiveUser;
+};
+
+const colorFromId = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const c = (hash & 0x00ffffff).toString(16).toUpperCase();
+  return "#" + "00000".substring(0, 6 - c.length) + c;
+};
+
 export default function EditorPage({ params }: { params: { id: string } }) {
   const documentId = params.id;
   const { data: session } = useSession();
+  const throttleTimeout = useRef<NodeJS.Timeout | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
+  const [cursors, setCursors] = useState<{ [id: string]: CursorData }>({});
+  const [cursorCoords, setCursorCoords] = useState<{
+    [id: string]: { top: number; left: number };
+  }>({});
 
   useEffect(() => {
     if (!session?.user) return;
@@ -42,6 +63,11 @@ export default function EditorPage({ params }: { params: { id: string } }) {
       setActiveUsers(users);
     });
     newSocket.on("receive-change", (newText: string) => setText(newText));
+    newSocket.on("receive-cursor-change", (data: CursorData) => {
+      if (data.user.id !== session.user.id) {
+        setCursors((prev) => ({ ...prev, [data.user.id]: data }));
+      }
+    });
 
     return () => {
       newSocket.disconnect();
@@ -67,10 +93,39 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     fetchDocument();
   }, [documentId]);
 
+  useLayoutEffect(() => {
+    const newCoords: { [id: string]: { top: number; left: number } } = {};
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    Object.values(cursors).forEach(({ position, user }) => {
+      if (user?.id) {
+        newCoords[user.id] = getCaretCoordinates(textarea, position);
+      }
+    });
+    setCursorCoords(newCoords);
+  }, [cursors, text]);
+
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
     setText(newText);
     socket?.emit("text-change", { newText, documentId });
+  };
+
+  const handleCursorChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const position = e.currentTarget.selectionStart;
+    if (throttleTimeout.current) {
+      clearTimeout(throttleTimeout.current);
+    }
+    throttleTimeout.current = setTimeout(() => {
+      if (socket && session?.user) {
+        socket.emit("cursor-change", {
+          documentId,
+          position,
+          user: session.user,
+        });
+      }
+    }, 50);
   };
 
   const handleSave = async () => {
@@ -139,18 +194,55 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <div className="w-full max-w-5xl h-[70vh] bg-[#1a1a1a] rounded-2xl shadow-xl">
+      <div className="w-full max-w-5xl h-[70vh] bg-[#1a1a1a] rounded-2xl shadow-xl relative">
         {isLoading ? (
           <Skeleton />
         ) : (
-          <Textarea
-            value={text}
-            onChange={handleTextChange}
-            placeholder="Start typing your notes here..."
-            className="w-full h-full bg-transparent text-gray-200 p-8 text-lg resize-none 
+          <>
+            <Textarea
+              ref={textareaRef}
+              value={text}
+              onChange={handleTextChange}
+              onSelect={handleCursorChange}
+              onScroll={handleCursorChange}
+              placeholder="Start typing your notes here..."
+              className="w-full h-full bg-transparent text-gray-200 p-8 text-lg resize-none 
                          outline-none focus-visible:ring-1 focus-visible:ring-indigo-500
-                         focus-visible:border-transparent transition-colors duration-300"
-          />
+                         focus-visible:border-transparent transition-colors duration-300 relative z-10 caret-white"
+            />
+            <div className="absolute top-0 left-0 p-8 w-full h-full pointer-events-none z-20">
+              {Object.entries(cursorCoords).map(([id, coords]) => {
+                const user = cursors[id]?.user;
+                if (!user || user.id === session?.user?.id || !coords)
+                  return null;
+                const userColor = colorFromId(user.id);
+                return (
+                  <div
+                    key={user.id}
+                    className="absolute transition-transform duration-100 ease-linear"
+                    style={{
+                      transform: `translate(${coords.left}px, ${coords.top}px)`,
+                    }}
+                  >
+                    <div
+                      className="w-0.5 h-6"
+                      style={{ backgroundColor: userColor }}
+                    />
+                    <div
+                      className="absolute text-white text-xs px-2 py-0.5 rounded"
+                      style={{
+                        backgroundColor: userColor,
+                        whiteSpace: "nowrap",
+                        top: "-1.5rem",
+                      }}
+                    >
+                      {user.name}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

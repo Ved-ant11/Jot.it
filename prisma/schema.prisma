@@ -19,7 +19,6 @@ model Document {
   author    User    @relation(fields: [authorId], references: [id])
   authorId  String
 
-  // Add a relation to the new permissions model
   permissions DocumentPermission[]
 }
 
@@ -28,7 +27,6 @@ model DocumentPermission {
   userId     String
   documentId String
   
-  // You could expand this later to add roles like "VIEWER" vs "EDITOR"
   // role       String @default("EDITOR")
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -74,8 +72,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   documents     Document[]
-  
-  // Add a relation to the new permissions model
+ 
   permissions   DocumentPermission[]
 }
 

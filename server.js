@@ -26,13 +26,15 @@ io.on("connection", (socket) => {
   socket.on("join-document", ({ documentId, user }) => {
     socket.join(documentId);
     console.log(
-      `[JOIN] User ${user.name} (${socket.id}) joined room: ${documentId}`
+      `[JOIN] User ${user?.name || "Anonymous"} (${
+        socket.id
+      }) joined room: ${documentId}`
     );
 
     if (!rooms[documentId]) {
       rooms[documentId] = [];
     }
-    if (!rooms[documentId].some((u) => u.id === user.id)) {
+    if (user && !rooms[documentId].some((u) => u.id === user.id)) {
       rooms[documentId].push({
         id: user.id,
         name: user.name,
@@ -42,12 +44,16 @@ io.on("connection", (socket) => {
 
     io.in(documentId).emit("update-user-list", rooms[documentId]);
 
-    socket.data.userId = user.id;
+    socket.data.userId = user?.id;
     socket.data.documentId = documentId;
   });
 
   socket.on("text-change", (data) => {
     socket.broadcast.to(data.documentId).emit("receive-change", data.newText);
+  });
+
+  socket.on("cursor-change", (data) => {
+    socket.broadcast.to(data.documentId).emit("receive-cursor-change", data);
   });
 
   socket.on("disconnect", () => {
